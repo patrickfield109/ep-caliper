@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EP Calipers — EGM Interval Measurement</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #12151c;
+    --surface2: #1a1f2b;
+    --border: #252d3d;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #7fff6b;
+    --text: #e8edf5;
+    --text-dim: #6b7894;
+    --caliper-colors: #00e5ff, #ff6b35, #7fff6b, #ff3d9a, #ffcc00, #b06cff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .logo span { color: var(--text-dim); font-weight: 400; font-size: 0.85rem; margin-left: 8px; }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+
+  .ref-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+  }
+  .ref-group label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .ref-group input[type="number"] {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    width: 70px;
+    outline: none;
+    text-align: right;
+  }
+  .ref-group .unit { color: var(--text-dim); font-size: 0.75rem; }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+  .btn.danger:hover { border-color: #ff4444; color: #ff4444; }
+
+  .mode-indicator {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    white-space: nowrap;
+  }
+  .mode-indicator.ref-mode { border-color: var(--accent2); color: var(--accent2); }
+  .mode-indicator.measure-mode { border-color: var(--accent); color: var(--accent); }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .canvas-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    cursor: crosshair;
+    min-width: 0;
+  }
+
+  #mainCanvas {
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+    image-rendering: pixelated;
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    border: 2px dashed var(--border);
+    margin: 20px;
+    border-radius: 12px;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .drop-overlay.hidden { opacity: 0; pointer-events: none; }
+  .drop-icon { font-size: 3rem; opacity: 0.3; }
+  .drop-text { color: var(--text-dim); font-size: 0.85rem; text-align: center; line-height: 1.7; }
+  .drop-text strong { color: var(--text); display: block; font-family: 'Syne', sans-serif; font-size: 1.1rem; margin-bottom: 4px; }
+
+  .sidebar {
+    width: 270px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .measurements-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .measurements-list::-webkit-scrollbar { width: 4px; }
+  .measurements-list::-webkit-scrollbar-track { background: transparent; }
+  .measurements-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .measurement-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    margin-bottom: 6px;
+    background: var(--surface2);
+    transition: border-color 0.15s;
+    position: relative;
+  }
+  .measurement-item:hover { border-color: var(--text-dim); }
+  .measurement-item.highlighted { border-color: var(--accent); }
+
+  .m-swatch {
+    width: 10px;
+    height: 26px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .m-info { flex: 1; min-width: 0; }
+  .m-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .m-label input {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    outline: none;
+    width: 100%;
+    cursor: text;
+  }
+  .m-label input:focus { color: var(--text); }
+  .m-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+  }
+  .m-value .unit { font-size: 0.65rem; color: var(--text-dim); font-weight: 400; font-family: 'Space Mono', monospace; }
+  .m-delete {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .m-delete:hover { color: #ff4444; background: rgba(255,68,68,0.1); }
+
+  .no-measurements {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    padding: 20px;
+    line-height: 1.8;
+  }
+
+  .sidebar-footer {
+    padding: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+  }
+
+  .ref-line-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.65rem;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(255,107,53,0.15);
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+  }
+
+  .zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .stats-bar {
+    padding: 6px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 16px;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+  .stats-bar span strong { color: var(--text); }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 1000;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .help-row {
+    display: flex; gap: 16px; padding: 4px 16px;
+    font-size: 0.62rem; color: var(--text-dim);
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .help-row kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    background: var(--surface2);
+    margin-right: 3px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">EP Calipers <span>interval measurement</span></div>
+  <div class="controls">
+    <div class="ref-group">
+      <label>REF DIST</label>
+      <input type="number" id="refMs" value="680" min="1" max="9999">
+      <span class="unit">ms</span>
+    </div>
+    <button class="btn" id="btnSetRef" title="Draw a reference caliper on a known-duration interval">Set Reference</button>
+    <button class="btn active" id="btnMeasure" title="Draw a new measurement caliper">New Caliper</button>
+    <button class="btn" id="btnPaste" title="Paste image from clipboard (Ctrl+V)">Paste Image</button>
+    <div id="modeLabel" class="mode-indicator measure-mode">MODE: MEASURE</div>
+    <div class="zoom-controls">
+      <button class="btn" id="btnZoomOut">−</button>
+      <button class="btn" id="btnZoom100">100%</button>
+      <button class="btn" id="btnZoomIn">+</button>
+    </div>
+  </div>
+</header>
+
+<div class="help-row">
+  <span><kbd>Ctrl+V</kbd> paste image</span>
+  <span><kbd>R</kbd> set reference mode</span>
+  <span><kbd>M</kbd> measure mode</span>
+  <span><kbd>Del</kbd> delete selected caliper</span>
+  <span><kbd>Scroll</kbd> zoom</span>
+  <span><kbd>Middle drag</kbd> pan</span>
+  <span>Drag caliper handles to adjust</span>
+</div>
+
+<div class="main">
+  <div class="canvas-area" id="canvasArea">
+    <canvas id="mainCanvas"></canvas>
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-icon">⚡</div>
+      <div class="drop-text">
+        <strong>EP Calipers</strong>
+        Paste an ECG/EGM image with <kbd>Ctrl+V</kbd><br>
+        or drag &amp; drop a file here<br><br>
+        <span style="font-size:0.7rem;color:#3d4a60">Set the reference distance in ms, draw a<br>reference caliper on a known interval,<br>then measure freely.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      Measurements
+      <span id="refBadge" class="ref-line-badge" style="display:none">⚠ No reference set</span>
+    </div>
+    <div class="measurements-list" id="measurementsList">
+      <div class="no-measurements">No measurements yet.<br>Draw calipers on the image.</div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="btn danger" id="btnClearAll" style="flex:1">Clear All</button>
+      <button class="btn" id="btnCopy" style="flex:1">Copy Table</button>
+    </div>
+  </div>
+</div>
+
+<div class="stats-bar" id="statsBar">
+  <span>Zoom: <strong id="zoomLabel">100%</strong></span>
+  <span>Calipers: <strong id="caliperCount">0</strong></span>
+  <span id="refStatus">Reference: <strong>NOT SET</strong></span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const COLORS = ['#00e5ff','#ff6b35','#7fff6b','#ff3d9a','#ffcc00','#b06cff','#ff8800','#00ffb3'];
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const canvasArea = document.getElementById('canvasArea');
+const dropOverlay = document.getElementById('dropOverlay');
+
+let img = null;
+let zoom = 1;
+let panX = 0, panY = 0;
+let calipers = [];
+let refCaliper = null; // {x1, x2} in image coords
+let refMs = 680;
+let mode = 'measure'; // 'ref' | 'measure'
+let dragging = null; // {caliperId, handle:'left'|'right'|'body', startX, origX1, origX2}
+let drawing = null; // {x1, currentX} in image coords
+let hoveredId = null;
+let selectedId = null;
+let colorIdx = 0;
+
+// Pan state
+let isPanning = false;
+let panStart = {x:0, y:0, px:0, py:0};
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function showToast(msg, ms=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function toImageX(screenX) {
+  const rect = canvasArea.getBoundingClientRect();
+  return (screenX - rect.left - panX) / zoom;
+}
+function toImageY(screenY) {
+  const rect = canvasArea.getBoundingClientRect();
+  return (screenY - rect.top - panY) / zoom;
+}
+function toScreenX(imgX) { return imgX * zoom + panX; }
+function toScreenY(imgY) { return imgY * zoom + panY; }
+
+function pxToMs(px) {
+  if (!refCaliper) return null;
+  const refPx = Math.abs(refCaliper.x2 - refCaliper.x1);
+  if (refPx === 0) return null;
+  return (Math.abs(px) / refPx) * refMs;
+}
+
+function getColor(idx) { return COLORS[idx % COLORS.length]; }
+
+// ── Image Loading ─────────────────────────────────────────────────────────────
+
+function loadImage(src) {
+  const i = new Image();
+  i.onload = () => {
+    img = i;
+    fitImage();
+    dropOverlay.classList.add('hidden');
+    render();
+    showToast('Image loaded — set reference interval first');
+  };
+  i.src = src;
+}
+
+function fitImage() {
+  if (!img) return;
+  const aw = canvasArea.clientWidth, ah = canvasArea.clientHeight;
+  zoom = Math.min(aw / img.width, ah / img.height, 1);
+  panX = (aw - img.width * zoom) / 2;
+  panY = (ah - img.height * zoom) / 2;
+  canvas.width = canvasArea.clientWidth;
+  canvas.height = canvasArea.clientHeight;
+  updateZoomLabel();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function render() {
+  canvas.width = canvasArea.clientWidth;
+  canvas.height = canvasArea.clientHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (img) {
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(zoom, zoom);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  }
+
+  // Draw reference caliper
+  if (refCaliper) {
+    drawCaliper({
+      id: '__ref__',
+      x1: refCaliper.x1, x2: refCaliper.x2,
+      color: '#ff6b35',
+      label: `REF: ${refMs}ms`,
+      isRef: true
+    }, false);
+  }
+
+  // Draw reference being drawn
+  if (drawing && mode === 'ref') {
+    const sx1 = toScreenX(drawing.x1);
+    const sx2 = toScreenX(drawing.currentX);
+    drawCaliperScreen(sx1, sx2, '#ff6b35', 'REF…', false, true);
+  }
+
+  // Draw measurement being drawn
+  if (drawing && mode === 'measure') {
+    const sx1 = toScreenX(drawing.x1);
+    const sx2 = toScreenX(drawing.currentX);
+    const ms = pxToMs(Math.abs(drawing.currentX - drawing.x1));
+    const lbl = ms !== null ? `${ms.toFixed(0)}ms` : '…';
+    drawCaliperScreen(sx1, sx2, drawing.color, lbl, false, true);
+  }
+
+  // Draw saved calipers
+  for (const c of calipers) {
+    const ms = pxToMs(Math.abs(c.x2 - c.x1));
+    const lbl = c.label || (ms !== null ? `${ms.toFixed(0)}ms` : '?ms');
+    const highlighted = c.id === hoveredId || c.id === selectedId;
+    drawCaliper(c, highlighted);
+  }
+
+  updateSidebar();
+  updateStats();
+}
+
+function drawCaliper(c, highlighted) {
+  const sx1 = toScreenX(c.x1);
+  const sx2 = toScreenX(c.x2);
+  const ms = pxToMs(Math.abs(c.x2 - c.x1));
+  const lbl = c.label || (ms !== null ? `${ms.toFixed(0)}ms` : '?ms');
+  drawCaliperScreen(sx1, sx2, c.color || '#00e5ff', lbl, highlighted, false, c.isRef);
+}
+
+function drawCaliperScreen(sx1, sx2, color, label, highlighted, drawing, isRef) {
+  const imgH = img ? img.height * zoom : canvas.height;
+  const cy = panY + imgH / 2;
+  const tickH = Math.max(30, imgH * 0.55);
+
+  ctx.save();
+  ctx.globalAlpha = drawing ? 0.6 : 1;
+
+  const lw = highlighted ? 2.5 : 1.5;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.setLineDash(isRef ? [6,3] : []);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = highlighted ? 8 : 4;
+
+  // Top tick
+  ctx.beginPath(); ctx.moveTo(sx1, cy - tickH/2); ctx.lineTo(sx1, cy + tickH/2); ctx.stroke();
+  // Bottom tick
+  ctx.beginPath(); ctx.moveTo(sx2, cy - tickH/2); ctx.lineTo(sx2, cy + tickH/2); ctx.stroke();
+  // Horizontal bar
+  ctx.beginPath(); ctx.moveTo(sx1, cy); ctx.lineTo(sx2, cy); ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
+
+  // Arrowheads
+  const dir = sx2 > sx1 ? 1 : -1;
+  const aw = 8;
+  ctx.fillStyle = color;
+  // Left arrow
+  ctx.beginPath();
+  ctx.moveTo(sx1, cy);
+  ctx.lineTo(sx1 + dir*aw, cy - 5);
+  ctx.lineTo(sx1 + dir*aw, cy + 5);
+  ctx.closePath(); ctx.fill();
+  // Right arrow
+  ctx.beginPath();
+  ctx.moveTo(sx2, cy);
+  ctx.lineTo(sx2 - dir*aw, cy - 5);
+  ctx.lineTo(sx2 - dir*aw, cy + 5);
+  ctx.closePath(); ctx.fill();
+
+  // Handle dots
+  const hr = highlighted ? 6 : 4;
+  ctx.beginPath(); ctx.arc(sx1, cy, hr, 0, Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.beginPath(); ctx.arc(sx2, cy, hr, 0, Math.PI*2);
+  ctx.fill();
+
+  // Label
+  ctx.font = `bold ${highlighted ? 13 : 12}px 'Space Mono', monospace`;
+  ctx.fillStyle = color;
+  ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+  const mx = (sx1 + sx2) / 2;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, mx, cy - tickH/2 - 8);
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+// ── Hit Testing ───────────────────────────────────────────────────────────────
+
+function hitTestCaliper(c, screenX, screenY) {
+  const imgH = img ? img.height * zoom : canvas.height;
+  const cy = panY + imgH / 2;
+  const sx1 = toScreenX(c.x1), sx2 = toScreenX(c.x2);
+  const HR = 10;
+  if (Math.hypot(screenX - sx1, screenY - cy) < HR) return 'left';
+  if (Math.hypot(screenX - sx2, screenY - cy) < HR) return 'right';
+  // body: near horizontal bar
+  const minX = Math.min(sx1, sx2), maxX = Math.max(sx1, sx2);
+  if (screenX >= minX && screenX <= maxX && Math.abs(screenY - cy) < 12) return 'body';
+  return null;
+}
+
+function hitTestRef(screenX, screenY) {
+  if (!refCaliper) return null;
+  return hitTestCaliper({...refCaliper, x1: refCaliper.x1, x2: refCaliper.x2}, screenX, screenY);
+}
+
+// ── Mouse Events ──────────────────────────────────────────────────────────────
+
+canvasArea.addEventListener('mousedown', e => {
+  if (!img) return;
+  if (e.button === 1) {
+    // Middle mouse pan
+    isPanning = true;
+    panStart = {x: e.clientX, y: e.clientY, px: panX, py: panY};
+    e.preventDefault(); return;
+  }
+  if (e.button !== 0) return;
+
+  const sx = e.clientX - canvasArea.getBoundingClientRect().left;
+  const sy = e.clientY - canvasArea.getBoundingClientRect().top;
+  const ix = toImageX(e.clientX), iy = toImageY(e.clientY);
+
+  // Check if clicking on existing caliper handle
+  for (let i = calipers.length - 1; i >= 0; i--) {
+    const c = calipers[i];
+    const hit = hitTestCaliper(c, sx, sy);
+    if (hit) {
+      selectedId = c.id;
+      dragging = {caliperId: c.id, handle: hit, startX: ix, origX1: c.x1, origX2: c.x2};
+      render(); return;
+    }
+  }
+
+  // Check ref caliper
+  if (refCaliper) {
+    const hit = hitTestRef(sx, sy);
+    if (hit) {
+      dragging = {caliperId: '__ref__', handle: hit, startX: ix, origX1: refCaliper.x1, origX2: refCaliper.x2};
+      render(); return;
+    }
+  }
+
+  // Start new caliper drawing
+  drawing = {x1: ix, currentX: ix, color: getColor(colorIdx)};
+  selectedId = null;
+});
+
+canvasArea.addEventListener('mousemove', e => {
+  const sx = e.clientX - canvasArea.getBoundingClientRect().left;
+  const sy = e.clientY - canvasArea.getBoundingClientRect().top;
+  const ix = toImageX(e.clientX);
+
+  if (isPanning) {
+    panX = panStart.px + (e.clientX - panStart.x);
+    panY = panStart.py + (e.clientY - panStart.y);
+    render(); return;
+  }
+
+  if (dragging) {
+    const dx = ix - dragging.startX;
+    if (dragging.caliperId === '__ref__') {
+      if (dragging.handle === 'left') refCaliper.x1 = dragging.origX1 + dx;
+      else if (dragging.handle === 'right') refCaliper.x2 = dragging.origX2 + dx;
+      else { refCaliper.x1 = dragging.origX1 + dx; refCaliper.x2 = dragging.origX2 + dx; }
+    } else {
+      const c = calipers.find(c => c.id === dragging.caliperId);
+      if (c) {
+        if (dragging.handle === 'left') c.x1 = dragging.origX1 + dx;
+        else if (dragging.handle === 'right') c.x2 = dragging.origX2 + dx;
+        else { c.x1 = dragging.origX1 + dx; c.x2 = dragging.origX2 + dx; }
+      }
+    }
+    render(); return;
+  }
+
+  if (drawing) {
+    drawing.currentX = ix;
+    render(); return;
+  }
+
+  // Hover detection
+  let newHover = null;
+  for (let i = calipers.length - 1; i >= 0; i--) {
+    if (hitTestCaliper(calipers[i], sx, sy)) { newHover = calipers[i].id; break; }
+  }
+  if (!newHover && refCaliper && hitTestRef(sx, sy)) newHover = '__ref__';
+
+  if (newHover !== hoveredId) {
+    hoveredId = newHover;
+    canvasArea.style.cursor = newHover ? 'ew-resize' : 'crosshair';
+    render();
+  }
+});
+
+canvasArea.addEventListener('mouseup', e => {
+  if (isPanning) { isPanning = false; return; }
+  if (e.button !== 0) return;
+
+  if (dragging) { dragging = null; render(); return; }
+
+  if (drawing) {
+    const x1 = drawing.x1, x2 = drawing.currentX;
+    const pixDist = Math.abs(x2 - x1);
+    if (pixDist > 5) {
+      if (mode === 'ref') {
+        refCaliper = {x1, x2};
+        document.getElementById('refBadge').style.display = 'none';
+        showToast(`Reference set: ${refMs}ms over ${pixDist.toFixed(0)}px`);
+      } else {
+        const ms = pxToMs(pixDist);
+        const id = Date.now().toString();
+        calipers.push({id, x1, x2, color: drawing.color, label: null, colorIdx});
+        colorIdx++;
+        selectedId = id;
+        if (!refCaliper) showToast('⚠ No reference set — intervals shown in pixels');
+      }
+    }
+    drawing = null;
+    render();
+  }
+});
+
+canvasArea.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvasArea.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const delta = e.deltaY < 0 ? 1.1 : 0.9;
+  const newZoom = Math.max(0.1, Math.min(10, zoom * delta));
+  panX = mx - (mx - panX) * (newZoom / zoom);
+  panY = my - (my - panY) * (newZoom / zoom);
+  zoom = newZoom;
+  updateZoomLabel();
+  render();
+}, {passive: false});
+
+// Touch / file drag
+canvasArea.addEventListener('dragover', e => e.preventDefault());
+canvasArea.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) {
+    const r = new FileReader();
+    r.onload = ev => loadImage(ev.target.result);
+    r.readAsDataURL(f);
+  }
+});
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'r' || e.key === 'R') setMode('ref');
+  if (e.key === 'm' || e.key === 'M') setMode('measure');
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && selectedId !== '__ref__') {
+    calipers = calipers.filter(c => c.id !== selectedId);
+    selectedId = null; render();
+  }
+  if (e.ctrlKey && e.key === 'v') { /* handled by paste */ }
+});
+
+document.addEventListener('paste', e => {
+  const items = e.clipboardData.items;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const blob = item.getAsFile();
+      const r = new FileReader();
+      r.onload = ev => loadImage(ev.target.result);
+      r.readAsDataURL(blob);
+      break;
+    }
+  }
+});
+
+// ── Buttons ───────────────────────────────────────────────────────────────────
+
+function setMode(m) {
+  mode = m;
+  const ml = document.getElementById('modeLabel');
+  const br = document.getElementById('btnSetRef');
+  const bm = document.getElementById('btnMeasure');
+  if (m === 'ref') {
+    ml.className = 'mode-indicator ref-mode';
+    ml.textContent = 'MODE: SET REFERENCE';
+    br.classList.add('active'); bm.classList.remove('active');
+  } else {
+    ml.className = 'mode-indicator measure-mode';
+    ml.textContent = 'MODE: MEASURE';
+    bm.classList.add('active'); br.classList.remove('active');
+  }
+}
+
+document.getElementById('btnSetRef').addEventListener('click', () => setMode('ref'));
+document.getElementById('btnMeasure').addEventListener('click', () => setMode('measure'));
+
+document.getElementById('refMs').addEventListener('input', e => {
+  refMs = parseFloat(e.target.value) || 680;
+  render();
+});
+
+document.getElementById('btnPaste').addEventListener('click', async () => {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const t of item.types) {
+        if (t.startsWith('image/')) {
+          const blob = await item.getType(t);
+          const r = new FileReader();
+          r.onload = ev => loadImage(ev.target.result);
+          r.readAsDataURL(blob); return;
+        }
+      }
+    }
+    showToast('No image found in clipboard');
+  } catch { showToast('Use Ctrl+V to paste image'); }
+});
+
+document.getElementById('btnZoomIn').addEventListener('click', () => { zoom = Math.min(10, zoom * 1.25); updateZoomLabel(); render(); });
+document.getElementById('btnZoomOut').addEventListener('click', () => { zoom = Math.max(0.1, zoom / 1.25); updateZoomLabel(); render(); });
+document.getElementById('btnZoom100').addEventListener('click', () => { fitImage(); render(); });
+
+document.getElementById('btnClearAll').addEventListener('click', () => {
+  calipers = []; refCaliper = null; selectedId = null;
+  document.getElementById('refBadge').style.display = '';
+  render();
+  showToast('All measurements cleared');
+});
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  if (!calipers.length) { showToast('No measurements to copy'); return; }
+  const rows = calipers.map((c, i) => {
+    const ms = pxToMs(Math.abs(c.x2 - c.x1));
+    const lbl = c.label || `Caliper ${i+1}`;
+    return `${lbl}\t${ms !== null ? ms.toFixed(1) : 'N/A'} ms`;
+  });
+  const txt = 'Label\tInterval\n' + rows.join('\n');
+  navigator.clipboard.writeText(txt).then(() => showToast('Copied to clipboard!'));
+});
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+function updateSidebar() {
+  const list = document.getElementById('measurementsList');
+  if (!calipers.length) {
+    list.innerHTML = '<div class="no-measurements">No measurements yet.<br>Draw calipers on the image.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  calipers.forEach((c, i) => {
+    const ms = pxToMs(Math.abs(c.x2 - c.x1));
+    const msStr = ms !== null ? ms.toFixed(1) : '—';
+    const div = document.createElement('div');
+    div.className = 'measurement-item' + (c.id === selectedId ? ' highlighted' : '');
+    div.innerHTML = `
+      <div class="m-swatch" style="background:${c.color}"></div>
+      <div class="m-info">
+        <div class="m-label"><input type="text" value="${c.label || `Caliper ${i+1}`}" placeholder="label…" data-id="${c.id}"></div>
+        <div class="m-value">${msStr} <span class="unit">ms</span></div>
+      </div>
+      <button class="m-delete" data-id="${c.id}">×</button>
+    `;
+    div.querySelector('.m-delete').addEventListener('click', () => {
+      calipers = calipers.filter(x => x.id !== c.id);
+      if (selectedId === c.id) selectedId = null;
+      render();
+    });
+    div.querySelector('input').addEventListener('change', e => {
+      const cal = calipers.find(x => x.id === e.target.dataset.id);
+      if (cal) { cal.label = e.target.value || null; render(); }
+    });
+    div.addEventListener('mouseenter', () => { hoveredId = c.id; render(); });
+    div.addEventListener('mouseleave', () => { hoveredId = null; render(); });
+    div.addEventListener('click', () => { selectedId = c.id; render(); });
+    list.appendChild(div);
+  });
+
+  const badge = document.getElementById('refBadge');
+  badge.style.display = !refCaliper ? '' : 'none';
+  badge.textContent = !refCaliper ? '⚠ No ref set' : '';
+}
+
+function updateStats() {
+  document.getElementById('caliperCount').textContent = calipers.length;
+  const rs = document.getElementById('refStatus');
+  if (refCaliper) {
+    const px = Math.abs(refCaliper.x2 - refCaliper.x1).toFixed(0);
+    rs.innerHTML = `Reference: <strong>${refMs}ms / ${px}px</strong>`;
+  } else {
+    rs.innerHTML = `Reference: <strong style="color:#ff6b35">NOT SET</strong>`;
+  }
+}
+
+function updateZoomLabel() {
+  document.getElementById('zoomLabel').textContent = `${Math.round(zoom * 100)}%`;
+}
+
+// Initial render
+render();
+updateSidebar();
+updateStats();
+
+// Resize
+window.addEventListener('resize', () => { if (img) fitImage(); render(); });
+</script>
+</body>
+</html>
